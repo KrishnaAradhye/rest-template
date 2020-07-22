@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- THIS FILE CAN BE REMOVED UNLESS BUILDING A ??STANDALONE?? PROJECT -->
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/spring http://www.mulesoft.org/schema/mule/spring/current/mule-spring.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	
+	<http:request-config name="Local_Consul_Agent" doc:name="HTTP Request configuration" doc:id="714c75ba-dc6d-4754-a3d0-00b73e282c78">
+		<http:request-connection host="localhost" port="8500" usePersistentConnections="false" />
+	</http:request-config>
+	<flow name="consul-register" doc:id="f2f71404-bdb8-449f-b6f3-bb7cec947cd3" >
+		<scheduler doc:name="Re-register every day" doc:id="a7f5b69d-56e3-4faa-87bf-4f40eff5116d" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="1" timeUnit="DAYS"/>
+			</scheduling-strategy>
+		</scheduler>
+		<ee:transform doc:name="Set Registration Payload" doc:id="66c8f310-83e4-4ea0-806e-5b4ed9ef10bf" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "Name": p('app.name'),
+  "Port": p('http.listener.port'),
+  "Tags": [
+  	"nm-" ++ p('env')
+  ],
+  "Check": {
+    "DeregisterCriticalServiceAfter": "1m",
+    "HTTP": "http://localhost:" ++ p('http.listener.port') ++ "/health/" ++ p('app.name'),
+    "Interval": "30s"
+  }
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="PUT" doc:name="Register with local Consul Agent" doc:id="0667e5bf-c299-4d5c-9910-40c434cfc0ff" path="/v1/agent/service/register" outputMimeType="application/json" outputEncoding="UTF-8" config-ref="Local_Consul_Agent">
+		</http:request>
+	</flow>
+	<flow name="consul-healthcheck" doc:id="51900ffa-bb73-4cf6-988f-6521afc64170" >
+		<http:listener doc:name="Listener" doc:id="c5e53a55-93b1-4a3f-baca-77795628893a" config-ref="globalListenerConfig" path="/health/${app.name}"/>
+		<set-payload value="OK" doc:name="OK" doc:id="7d457a36-c449-43eb-97e7-e42bd65acb6a" mimeType="text/plain" encoding="UTF-8"/>
+	</flow>
+</mule>
